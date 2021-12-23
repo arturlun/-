@@ -1,0 +1,105 @@
+Модуль отправки фото
+
+Фото медицинских анализов отправляются на сервер backend по запросу POST /slot/upload/image, максимальные размер и разрешение изображения 1024 * 1024 * 100
+
+Документация для api
+http://api.elife.dev.globus-ltd.com/documentation/#/Medical%20%D1%82ests/post_medical_attach_photo
+http://api.elife.dev.globus-ltd.com/documentation/#/Medical%20%D1%82ests/post_medical_remove_photo
+
+Для отправки фото в чат тренеру используется сервер mattermost
+
+https://api.mattermost.com/#tag/files - для загрузки файлов
+https://api.mattermost.com/#tag/posts - для прикрепления id файла к сообщению
+
+
+При интеграции чата mattermost были задействованы следующие сущности:
+
+- пользователь. разработанные методы:
+
+регистрация
+авторизация
+добавление в команду
+редактирование личной информации - email, firstname, lastname, пароль
+получение аватарки
+удаление
+
+backend взаимодействует с чатом по api, описанному по ссылке https://api.mattermost.com/#tag/users
+
+
+- канал. он же чат с тренером. разработанные методы:
+
+создание
+добавление пользователей
+корректировка состава участников при переназначении специалиста
+открепление специалиста - удаление канала
+переименование и удаление канала
+
+backend взаимодействует с чатом по api, описанному по ссылке https://api.mattermost.com/#tag/channels
+
+
+- сообщение. разработанные методы:
+
+получение списка для канала
+отдача последнего сообщения в чате
+отправка сообщения
+
+backend взаимодействует с чатом по api, описанному по ссылке https://api.mattermost.com/#tag/posts
+
+
+Схемы запросов описаны в классах ...Оptions, схемы ответов - в классах ...Response
+Доступ по api осуществляется через controller, который обращается к слою service, который в свою очередь обращается к repository, который имеет доступ к слою options и response.
+
+
+доработка api mattermost server (golang)
+- api сообщения и списка каналов - добавление данных в Response
+- api списка сообщение - добавление пользователей в Response
+- api пользователя - добавление ссылки на аватар в Response
+
+список доработок можно посмотреть по ссылке https://gitlab.globus-ltd.com/a.gazetdinov/mattermost-server/-/commits/master
+
+доработка админки mattermost web client (React.js)
+- добавление поля header в название чата
+- обновление названия каналов в сайдбар интерфейса
+
+список доработок можно посмотреть по ссылке https://gitlab.globus-ltd.com/a.gazetdinov/mattermost-webapp/-/commits/master
+
+mattermost развёрнут в docker при помощи репозитория https://gitlab.globus-ltd.com/a.gazetdinov/mattermost-docker
+
+
+для хранения баллов за текущий день создана таблица
+
+user_dashboard_points
+(
+    user_id
+    current - 'Заработано баллов на текущий момент',
+    month_average - 'Среднее значение баллов за последние 30 дней',
+    method_id - 'методика',
+)
+
+для хранения истории по дням  создана таблица
+
+user_dashboard_progress
+(
+    user_id- 'пользователь'
+    date - 'дата'
+    rating   'место в рейтинге',
+    points   'количество баллов за выполнение методики',
+    progress 'прогресс по методике',
+    method_id 'методика (PHYSICAL, MEAL, LIQUID, ENERGY)',
+)
+
+запросы к api
+
+GET /dashboard/progress/daily
+GET /dashboard/progress/point
+GET /dashboard/progress/liquid
+GET /dashboard/progress/meal
+GET /dashboard/progress/physical
+GET /dashboard/progress/energy
+
+запросы приходят на api\controllers\dashboard\ProgressController
+задействован сервисный слой core\services\UserDashboardProgressService
+репозитории UserRepository, ProgressRepository, PointsRepository
+Сущности User, Progress и Points
+
+Раз в сутки в 23:59 итоги подсчитываются (задача в cron) и записываются в user_dashboard_progress, текущие результаты в user_dashboard_points обнуляются. Через минуту начинается новый день.
